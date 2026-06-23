@@ -220,7 +220,7 @@ If using local MongoDB (Option B from Step 5), run the seed script to populate a
 
 ```bash
 cd ~/AirBNB-backend
-npx ts-node data/seed.ts
+node data/seed.js
 ```
 
 Expected output:
@@ -237,12 +237,12 @@ Done.
 
 To re-seed from scratch (wipes existing data first):
 ```bash
-npx ts-node data/seed.ts --force
+node data/seed.js --force
 ```
 
 To seed a single collection only:
 ```bash
-npx ts-node data/seed.ts --only stay
+node data/seed.js --only stay
 ```
 
 > Skip this step if using MongoDB Atlas — the Atlas cluster already has data.
