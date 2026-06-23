@@ -146,7 +146,7 @@ Test Nginx is up — open `http://<YOUR_EC2_PUBLIC_IP>` in a browser. You should
 
 ```bash
 cd ~
-git clone https://github.com/oferGavrilov/AirBNB-backend.git
+git clone https://github.com/emraay-devops/AirBNB-backend.git
 cd AirBNB-backend
 ```
 
