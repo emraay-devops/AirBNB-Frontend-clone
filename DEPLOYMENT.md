@@ -1,6 +1,6 @@
 # AirBNB Clone — EC2 Deployment Guide
 **Server:** AWS EC2 t3.medium · Ubuntu 24.04 LTS  
-**Stack:** Angular 15 (frontend) · Node.js/Express (backend) · MongoDB · Nginx · PM2
+**Stack:** Angular 15 (frontend) · Node.js/Express/TypeScript (backend) · MongoDB Atlas · Nginx · PM2
 
 > **Architecture note:** In production the Angular app uses relative URLs (`/api/` and same-origin sockets). This means the backend **must run on the same server**. Nginx acts as a reverse proxy — it serves the Angular static files and forwards `/api/` and `/socket.io/` requests to the Node.js backend running on port 3030.
 
@@ -10,8 +10,8 @@
 1. [AWS Prerequisites](#1-aws-prerequisites)
 2. [Connect to the Server](#2-connect-to-the-server)
 3. [System Setup](#3-system-setup)
-4. [Install Node.js 18](#4-install-nodejs-18)
-5. [Install MongoDB](#5-install-mongodb)
+4. [Install Node.js 22](#4-install-nodejs-22)
+5. [MongoDB — Atlas or Local](#5-mongodb--atlas-cloud-or-local)
 6. [Install PM2 & Nginx](#6-install-pm2--nginx)
 7. [Deploy the Backend](#7-deploy-the-backend)
 8. [Deploy the Frontend](#8-deploy-the-frontend)
@@ -67,36 +67,46 @@ sudo apt install -y git curl build-essential
 
 ---
 
-## 4. Install Node.js 18
+## 4. Install Node.js 22
 
-Angular 15 requires Node.js 16 or 18. We'll use 18 LTS via NodeSource:
+Angular 15 requires Node.js 16+. We'll install Node 22 LTS via NodeSource:
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
 
 Verify the installation:
 
 ```bash
-node -v   # Should print v18.x.x
-npm -v    # Should print 9.x.x or similar
+node -v   # Should print v22.x.x
+npm -v    # Should print 10.x.x or similar
 ```
 
 ---
 
-## 5. Install MongoDB
+## 5. MongoDB — Atlas (Cloud) or Local
 
-The backend uses MongoDB. Install the official Community Edition:
+The backend ships configured for **MongoDB Atlas**, but you can use a local MongoDB instance instead. Choose one option.
+
+### Option A — MongoDB Atlas (recommended)
+
+No installation needed. You'll update the connection string in Step 7c with your own Atlas credentials.
+
+> Don't have a cluster yet? Create a free one at [cloud.mongodb.com](https://cloud.mongodb.com). After creating it, go to **Database Access** to add a user and **Network Access** to whitelist your EC2 IP (or `0.0.0.0/0` for open access). Copy the connection string — you'll need it in Step 7c.
+
+### Option B — Local MongoDB
+
+Install MongoDB Community Edition on the server:
 
 ```bash
 # Import the MongoDB GPG key
 curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
   sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
 
-# Add the MongoDB repo
+# Add the MongoDB repo (Ubuntu 24.04 uses the 'noble' codename)
 echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
-  https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
+  https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/7.0 multiverse" | \
   sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
 
 # Install
@@ -109,14 +119,20 @@ Start MongoDB and enable it on boot:
 ```bash
 sudo systemctl start mongod
 sudo systemctl enable mongod
-```
-
-Confirm it's running:
-
-```bash
 sudo systemctl status mongod
 # Look for: Active: active (running)
 ```
+
+Then in Step 7c, set `config/prod.ts` to:
+
+```typescript
+module.exports = {
+  dbURL: 'mongodb://127.0.0.1:27017/stayDB',
+  dbName: 'stayDB'
+}
+```
+
+Same structure as the Atlas version — just swap the `mongodb+srv://...` URL for `mongodb://127.0.0.1:27017/stayDB`. No username or password needed for a local instance by default.
 
 ---
 
@@ -146,7 +162,7 @@ Test Nginx is up — open `http://<YOUR_EC2_PUBLIC_IP>` in a browser. You should
 
 ```bash
 cd ~
-git clone https://github.com/oferGavrilov/AirBNB-backend.git
+git clone https://github.com/emraay-devops/AirBNB-backend.git
 cd AirBNB-backend
 ```
 
@@ -156,41 +172,55 @@ cd AirBNB-backend
 npm install
 ```
 
-### 7c. Create the environment file
+### 7c. Update the MongoDB Atlas connection string
 
-The backend needs a `.env` file. Create it:
+The backend hardcodes the Atlas URL in `config/prod.ts`. Open it and replace it with your own Atlas connection string:
+
+```bash
+nano config/prod.ts
+```
+
+Replace the `dbURL` value:
+
+```typescript
+module.exports = {
+  dbURL: 'mongodb+srv://<YOUR_USER>:<YOUR_PASSWORD>@<YOUR_CLUSTER>.mongodb.net/?retryWrites=true&w=majority',
+  dbName: 'stayDB'
+}
+```
+
+Save and exit: `Ctrl+O`, `Enter`, `Ctrl+X`.
+
+> **Don't have an Atlas cluster?** Create a free one at [cloud.mongodb.com](https://cloud.mongodb.com). After creating a cluster, go to **Database Access** to add a user and **Network Access** to whitelist your EC2 IP (or `0.0.0.0/0` for open access).
+
+### 7d. Create the environment file
 
 ```bash
 nano .env
 ```
 
-Paste and fill in the values below:
+Paste the following:
 
 ```env
 PORT=3030
-MONGODB_URI=mongodb://127.0.0.1:27017/airbnb
-SESSION_SECRET=replace_with_a_long_random_string
-GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
 NODE_ENV=production
+SECRET1=replace_with_a_long_random_string
 ```
 
-> **Tips:**
-> - Generate a strong `SESSION_SECRET` with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-> - The `GOOGLE_MAPS_API_KEY` is needed for the map features. Get one from [Google Cloud Console](https://console.cloud.google.com/).
-> - If the backend repo has its own `.env.example`, check it for any additional variables.
+> Generate a strong `SECRET1` with:
+> ```bash
+> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+> ```
 
 Save and exit: `Ctrl+O`, `Enter`, `Ctrl+X`.
 
-### 7d. Start the backend with PM2
+### 7e. Start the backend with PM2
+
+The backend is TypeScript — use `ts-node` (already installed as a dev dependency) to run it:
 
 ```bash
-pm2 start index.js --name airbnb-backend
+pm2 start server.ts --interpreter $(which ts-node) --name airbnb-backend
 ```
-
-> If the entry file is named differently (e.g. `server.js` or `app.js`), adjust accordingly:
-> ```bash
-> ls *.js   # check which file is the entry point
-> ```
 
 Confirm it's running:
 
@@ -219,7 +249,7 @@ curl http://localhost:3030/api/stay
 
 ```bash
 cd ~
-git clone https://github.com/oferGavriel/AirBNB-Frontend-clone.git
+git clone https://github.com/emraay-devops/AirBNB-Frontend-clone.git
 cd AirBNB-Frontend-clone
 ```
 
@@ -391,10 +421,7 @@ sudo certbot renew --dry-run
 Run these to confirm everything is wired up correctly:
 
 ```bash
-# 1. MongoDB is running
-sudo systemctl status mongod | grep Active
-
-# 2. Backend is running and responding
+# 1. Backend is running and responding
 curl -s http://localhost:3030/api/stay | head -c 200
 
 # 3. Nginx is running
