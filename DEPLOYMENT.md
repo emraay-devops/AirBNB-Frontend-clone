@@ -219,7 +219,7 @@ Save and exit: `Ctrl+O`, `Enter`, `Ctrl+X`.
 The backend is TypeScript — use `ts-node` (already installed as a dev dependency) to run it:
 
 ```bash
-pm2 start server.ts --interpreter $(which ts-node) --name airbnb-backend
+pm2 start server.ts --interpreter ./node_modules/.bin/ts-node --name airbnb-backend
 ```
 
 Confirm it's running:
