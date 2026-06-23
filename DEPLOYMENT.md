@@ -13,7 +13,7 @@
 4. [Install Node.js 22](#4-install-nodejs-22)
 5. [MongoDB — Atlas or Local](#5-mongodb--atlas-cloud-or-local)
 6. [Install PM2 & Nginx](#6-install-pm2--nginx)
-7. [Deploy the Backend](#7-deploy-the-backend)
+7. [Deploy the Backend](#7-deploy-the-backend) *(includes seeding)*
 8. [Deploy the Frontend](#8-deploy-the-frontend)
 9. [Configure Nginx](#9-configure-nginx)
 10. [PM2 Startup on Reboot](#10-pm2-startup-on-reboot)
@@ -214,7 +214,40 @@ SECRET1=replace_with_a_long_random_string
 
 Save and exit: `Ctrl+O`, `Enter`, `Ctrl+X`.
 
-### 7e. Start the backend with PM2
+### 7e. Seed the database
+
+If using local MongoDB (Option B from Step 5), run the seed script to populate all collections (80 stays, 10 legacy stays, 82 users, 161 orders):
+
+```bash
+cd ~/AirBNB-backend
+npx ts-node data/seed.ts
+```
+
+Expected output:
+```
+Connected to: mongodb://127.0.0.1:27017/stayDB
+
+  [stay]  Inserted 80 docs.
+  [stays] Inserted 10 docs.
+  [user]  Inserted 82 docs.
+  [order] Inserted 161 docs.
+
+Done.
+```
+
+To re-seed from scratch (wipes existing data first):
+```bash
+npx ts-node data/seed.ts --force
+```
+
+To seed a single collection only:
+```bash
+npx ts-node data/seed.ts --only stay
+```
+
+> Skip this step if using MongoDB Atlas — the Atlas cluster already has data.
+
+### 7f. Start the backend with PM2
 
 The backend is TypeScript — use `ts-node` (already installed as a dev dependency) to run it:
 
@@ -256,10 +289,11 @@ cd AirBNB-Frontend-clone
 ### 8b. Install dependencies
 
 ```bash
-npm install
+npm install --legacy-peer-deps
 ```
 
 > This may take 2–3 minutes on first run. The `postinstall` script runs `ngcc` (Angular compatibility compiler) which is expected.
+> The `--legacy-peer-deps` flag is required due to a minor version mismatch between Angular 15 packages (`@angular/animations@15.2.7` vs `@angular/core@15.2.1`) — it is safe to use here.
 
 ### 8c. Install the Angular CLI globally
 
